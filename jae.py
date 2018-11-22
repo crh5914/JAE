@@ -35,20 +35,20 @@ class JAE:
         nivec = ivec + tf.random_normal(tf.shape(ivec))
         uencode,iencode = nuvec,nivec
         for i,size in enumerate(self.layer_sizes):
-            uencode = tf.layers.dense(uencode,size,activation=tf.nn.relu,name='uencoder_layer_%d'%i)
-            iencode = tf.layers.dense(iencode,size,activation=tf.nn.relu,name='iencoder_layer_%d'%i)
+            uencode = tf.layers.dense(uencode,size,activation=tf.nn.relu,kernel_initializer=tf.glorot_uniform_initializer,name='uencoder_layer_%d'%i)
+            iencode = tf.layers.dense(iencode,size,activation=tf.nn.relu,kernel_initializer=tf.glorot_uniform_initializer,name='iencoder_layer_%d'%i)
         udecode,idecode = uencode,iencode
         dec_layer = self.layer_sizes[::-1][1:]
         for i,size in enumerate(dec_layer):
-            udecode = tf.layers.dense(udecode,size,activation=tf.nn.relu,name='udecoder_layer_%d'%i)
-            idecode = tf.layers.dense(idecode,size,activation=tf.nn.relu,name='idecoder_layer_%d'%i)
-        ruvec = tf.layers.dense(udecode,self.num_items,activation=tf.nn.relu,name='user_reconstruction_layer')
-        rivec = tf.layers.dense(udecode,self.num_users,activation=tf.nn.relu,name='item_reconstruction_layer')
+            udecode = tf.layers.dense(udecode,size,activation=tf.nn.relu,kernel_initializer=tf.glorot_uniform_initializer,name='udecoder_layer_%d'%i)
+            idecode = tf.layers.dense(idecode,size,activation=tf.nn.relu,kernel_initializer=tf.glorot_uniform_initializer,name='idecoder_layer_%d'%i)
+        ruvec = tf.layers.dense(udecode,self.num_items,activation=tf.nn.relu,kernel_initializer=tf.glorot_uniform_initializer,name='user_reconstruction_layer')
+        rivec = tf.layers.dense(udecode,self.num_users,activation=tf.nn.relu,kernel_initializer=tf.glorot_uniform_initializer,name='item_reconstruction_layer')
         ureconstructionloss = tf.reduce_sum(umask*tf.square(ruvec-uvec),axis=1)
         ireconstructionloss = tf.reduce_sum(vmask*tf.square(rivec-ivec),axis=1)
         f = tf.concat([uencode,iencode],axis=1)
         for i,size in enumerate(self.full_layer_sizes):
-            f = tf.layers.dense(f,size,activation=tf.nn.relu,name='full_layer_%d'%i)
+            f = tf.layers.dense(f,size,activation=tf.nn.relu,kernel_initializer=tf.glorot_uniform_initializer,name='full_layer_%d'%i)
         rating_loss = tf.square(tf.reduce_sum(f,axis=1)-self.rating)
         self.loss = tf.reduce_mean(tf.add_n([rating_loss,ureconstructionloss,ireconstructionloss]))
         self.mse = tf.reduce_mean(rating_loss)

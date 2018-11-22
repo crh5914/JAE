@@ -9,15 +9,16 @@ def parse_args():
     parser.add_argument('--sep',type=str,default='\t',help='delimiter')
     parser.add_argument('--batch_size',type=int,default=1024,help='delimiter')
     parser.add_argument('--test_rate',type=float,default=0.2,help='test set ratio')
-    parser.add_argument('--enlayer',type=str,default='[500,100]',help='encoder layer size')
+    parser.add_argument('--enlayer',type=str,default='[100,100]',help='encoder layer size')
     parser.add_argument('--fclayer',type=str,default='[100,50,1]',help='full connected layer size')
     return parser.parse_args()
 class JAE:
-    def __init__(self,sess,num_users,num_items,layer_sizes,full_layer_sizes,lr):
+    def __init__(self,sess,num_users,num_items,rating_matrix,layer_sizes,full_layer_sizes,lr):
         self.num_users = num_users
         self.num_items = num_items
         self.sess = sess
         self.lr = lr
+        self.rating_table = rating_matrix
         self.layer_sizes = layer_sizes
         self.full_layer_sizes = full_layer_sizes
         self.build_up()
@@ -25,7 +26,7 @@ class JAE:
         self.user = tf.placeholder(shape=(None,),dtype=tf.int32)
         self.item = tf.placeholder(shape=(None,),dtype=tf.int32)
         self.rating = tf.placeholder(shape=(None,),dtype=tf.float32)
-        self.rating_matrix = tf.Variable(tf.random_normal(shape=(self.num_users,self.num_items),stddev=0.01),trainable=False)
+        self.rating_matrix = tf.constant(self.rating_table)
         uvec = tf.nn.embedding_lookup(self.rating_matrix,self.user)
         ivec = tf.nn.embedding_lookup(tf.transpose(self.rating_matrix),self.item)
         umask = tf.cast(uvec>0,dtype=tf.float32)
@@ -52,9 +53,7 @@ class JAE:
         self.loss = tf.reduce_mean(tf.add_n([rating_loss,ureconstructionloss,ireconstructionloss]))
         self.mse = tf.reduce_mean(rating_loss)
         self.mae = tf.reduce_mean(tf.abs(tf.reduce_sum(f,axis=1)-self.rating))
-        init = tf.global_variables_initializer()
         self.opt = tf.train.AdamOptimizer(learning_rate=self.lr).minimize(self.loss)
-        self.sess.run(init)
     def train(self,users,items,ratings):
         feed_dict = {self.user:users,self.item:items,self.rating:ratings}
         _,loss,mse,mae = self.sess.run([self.opt,self.loss,self.mse,self.mae],feed_dict=feed_dict)
@@ -80,7 +79,7 @@ def load(file,test_rate,sep='\t'):
     np.random.shuffle(idxs)
     test_idxs =  idxs[-int(count*test_rate):]
     idx = 0
-    rating_matrix = np.zeros((num_users,num_items))
+    rating_matrix = np.zeros((num_users,num_items),dtype=np.float32)
     train,test = [],[] 
     with open(file,'r') as fp:
         for line in fp:
@@ -112,8 +111,10 @@ def main():
     # load dataset
     train,test,num_users,num_items,rating_matrix = load(args.dataset,args.test_rate,args.sep)
     sess = tf.Session()
-    model = JAE(sess,num_users,num_items,enlayer_size,fclayer_size,args.lr)
-    sess.run(tf.assign(model.rating_matrix,rating_matrix))
+    model = JAE(sess,num_users,num_items,rating_matrix,enlayer_size,fclayer_size,args.lr)
+    #sess.run(tf.assign(model.rating_matrix,rating_matrix))
+    init = tf.global_variables_initializer()
+    sess.run(init)
     best_rmse,best_mae,batch_epoch = 0,0,0
     for epoch in range(args.epoch):
         loss,mse,mae = 0,0,0

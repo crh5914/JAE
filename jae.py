@@ -3,9 +3,9 @@ import argparse
 import numpy as np
 def parse_args():
     parser = argparse.ArgumentParser(description='run jae')
-    parser.add_argument('--lr',type=float,default=0.001,help='learning rate')
+    parser.add_argument('--lr',type=float,default=0.0005,help='learning rate')
     parser.add_argument('--epoch',type=int,default=100,help='trainning epochs')
-    parser.add_argument('--dataset',type=str,default='ml100k',help='dataset')
+    parser.add_argument('--dataset',type=str,default='./data/ml100k.ratings',help='dataset')
     parser.add_argument('--sep',type=str,default='\t',help='delimiter')
     parser.add_argument('--batch_size',type=int,default=1024,help='delimiter')
     parser.add_argument('--test_rate',type=float,default=0.2,help='test set ratio')
@@ -35,25 +35,26 @@ class JAE:
         nivec = ivec + tf.random_normal(tf.shape(ivec))
         uencode,iencode = nuvec,nivec
         for i,size in enumerate(self.layer_sizes):
-            uencode = tf.layers.dense(uencode,size,activation=tf.nn.relu,kernel_initializer=tf.glorot_uniform_initializer,name='uencoder_layer_%d'%i)
-            iencode = tf.layers.dense(iencode,size,activation=tf.nn.relu,kernel_initializer=tf.glorot_uniform_initializer,name='iencoder_layer_%d'%i)
+            uencode = tf.layers.dense(uencode,size,name='uencoder_layer_%d'%i)
+            iencode = tf.layers.dense(iencode,size,name='iencoder_layer_%d'%i)
         udecode,idecode = uencode,iencode
+        #activation=tf.nn.relu,
         dec_layer = self.layer_sizes[::-1][1:]
         for i,size in enumerate(dec_layer):
-            udecode = tf.layers.dense(udecode,size,activation=tf.nn.relu,kernel_initializer=tf.glorot_uniform_initializer,name='udecoder_layer_%d'%i)
-            idecode = tf.layers.dense(idecode,size,activation=tf.nn.relu,kernel_initializer=tf.glorot_uniform_initializer,name='idecoder_layer_%d'%i)
-        ruvec = tf.layers.dense(udecode,self.num_items,activation=tf.nn.relu,kernel_initializer=tf.glorot_uniform_initializer,name='user_reconstruction_layer')
-        rivec = tf.layers.dense(udecode,self.num_users,activation=tf.nn.relu,kernel_initializer=tf.glorot_uniform_initializer,name='item_reconstruction_layer')
-        ureconstructionloss = tf.reduce_sum(umask*tf.square(ruvec-uvec),axis=1)
-        ireconstructionloss = tf.reduce_sum(vmask*tf.square(rivec-ivec),axis=1)
+            udecode = tf.layers.dense(udecode,size,name='udecoder_layer_%d'%i)
+            idecode = tf.layers.dense(idecode,size,name='idecoder_layer_%d'%i)
+        ruvec = tf.layers.dense(udecode,self.num_items,name='user_reconstruction_layer')
+        rivec = tf.layers.dense(udecode,self.num_users,name='item_reconstruction_layer')
+        ureconstructionloss = tf.reduce_sum(umask*tf.square(ruvec-uvec),axis=1)/tf.reduce_sum(umask,axis=1)
+        ireconstructionloss = tf.reduce_sum(vmask*tf.square(rivec-ivec),axis=1)/tf.reduce_sum(vmask,axis=1)
         f = tf.concat([uencode,iencode],axis=1)
         for i,size in enumerate(self.full_layer_sizes):
-            f = tf.layers.dense(f,size,activation=tf.nn.relu,kernel_initializer=tf.glorot_uniform_initializer,name='full_layer_%d'%i)
+            f = tf.layers.dense(f,size,name='full_layer_%d'%i)
         rating_loss = tf.square(tf.reduce_sum(f,axis=1)-self.rating)
         self.loss = tf.reduce_mean(tf.add_n([rating_loss,ureconstructionloss,ireconstructionloss]))
         self.mse = tf.reduce_mean(rating_loss)
         self.mae = tf.reduce_mean(tf.abs(tf.reduce_sum(f,axis=1)-self.rating))
-        self.opt = tf.train.AdamOptimizer(learning_rate=self.lr).minimize(self.loss)
+        self.opt = tf.train.GradientDescentOptimizer(learning_rate=self.lr).minimize(self.loss)
     def train(self,users,items,ratings):
         feed_dict = {self.user:users,self.item:items,self.rating:ratings}
         _,loss,mse,mae = self.sess.run([self.opt,self.loss,self.mse,self.mae],feed_dict=feed_dict)
